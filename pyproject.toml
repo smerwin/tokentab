@@ -1,0 +1,20 @@
+[project]
+name = "tokentab"
+version = "0.1.0"
+description = "What your Claude Code token spend bought, per merged PR"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["click", "pyyaml", "rich"]
+
+[project.scripts]
+tokentab = "tokentab.cli:main"
+
+[dependency-groups]
+dev = ["pytest"]
+
+[build-system]
+requires = ["uv_build>=0.8,<1"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = ""
