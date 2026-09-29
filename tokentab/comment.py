@@ -37,7 +37,8 @@ def render(key: tuple, evs: list[dict], prs: dict) -> str:
         flag = " (unpriced, estimated)" if "unpriced" in mt["flags"] else ""
         lines.append(f"| `{model}`{flag} | {rpt.human(mt['tokens'])} | ${mt['usd']:,.2f} |")
     lines += ["", "<sub>API-equivalent USD: every token priced at the published API rate, whatever plan paid for it. "
-              "Counted by tokentab from the posting machine's local Claude Code transcripts; "
+              "Counted by [tokentab](https://github.com/smerwin/tokentab) from the posting machine's local "
+              "Claude Code transcripts; "
               "other contributors' usage is not included.</sub>"]
     return "\n".join(lines) + "\n"
 

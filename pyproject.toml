@@ -16,6 +16,11 @@ classifiers = [
     "Topic :: Software Development",
 ]
 
+[project.urls]
+Homepage = "https://github.com/smerwin/tokentab"
+Repository = "https://github.com/smerwin/tokentab"
+Issues = "https://github.com/smerwin/tokentab/issues"
+
 [project.scripts]
 tokentab = "tokentab.cli:main"
 

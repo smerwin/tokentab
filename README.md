@@ -9,11 +9,11 @@ day, session, and model from the same files and stops at the session; tokentab j
 the pull requests they produced, so the unit is "cost per merged PR", and it writes a report a
 non-engineer can read.
 
-![tokentab report in the terminal](docs/demo-terminal.svg)
+![tokentab report in the terminal](https://raw.githubusercontent.com/smerwin/tokentab/main/docs/demo-terminal.svg)
 
-![HTML report](docs/demo-report.png)
+![HTML report](https://raw.githubusercontent.com/smerwin/tokentab/main/docs/demo-report.png)
 
-<sub>Screenshots use synthetic data for an imaginary repo; regenerate them with `uv run python scripts/demo.py`.</sub>
+<sub>Screenshots use synthetic data for an imaginary repo; regenerate them with [`scripts/demo.py`](https://github.com/smerwin/tokentab/blob/main/scripts/demo.py).</sub>
 
 ## Run it
 
@@ -206,4 +206,4 @@ uv run pytest
 
 ## License
 
-MIT; see [LICENSE](LICENSE).
+MIT; see [LICENSE](https://github.com/smerwin/tokentab/blob/main/LICENSE).
