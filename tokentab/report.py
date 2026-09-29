@@ -81,7 +81,8 @@ VIEWS = {
 
 
 def week(ts) -> str:
-    return (ts.date() - timedelta(days=ts.weekday())).isoformat()
+    local = ts.astimezone()
+    return (local.date() - timedelta(days=local.weekday())).isoformat()
 
 
 def human(n: float) -> str:
