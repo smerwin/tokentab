@@ -204,6 +204,21 @@ uv sync
 uv run pytest
 ```
 
+## Releasing
+
+Publishing uses PyPI trusted publishing from GitHub Actions
+([`publish.yml`](https://github.com/smerwin/tokentab/blob/main/.github/workflows/publish.yml)), so no
+PyPI token exists anywhere. Once, on PyPI under Account → Publishing, add a publisher with project
+`tokentab`, owner `smerwin`, repository `tokentab`, workflow `publish.yml`, and environment `pypi`.
+
+To release, set `version` in `pyproject.toml`, commit and push, then publish a GitHub release whose tag
+is that version with a `v` in front. The workflow checks the tag against the version, runs the tests,
+builds, and uploads.
+
+```bash
+gh release create v0.1.0 --generate-notes
+```
+
 ## License
 
 MIT; see [LICENSE](https://github.com/smerwin/tokentab/blob/main/LICENSE).
