@@ -8,14 +8,14 @@ from pathlib import Path
 import click
 from rich.console import Console
 
-from . import db, report as rpt
+from . import STATE, db, report as rpt
 from .attribute import attribute, resolve_repo
 from .loaders import otel
 from .loaders.claude_jsonl import DEFAULT_ROOT, load
 from .pricing import lookup
 
 err = Console(stderr=True)
-WARN = ("failed", "limit", "did not return", "assumed")
+WARN = ("no PR data", "limit", "known only", "assumed")
 
 
 def parse_since(s: str) -> datetime:
@@ -47,11 +47,16 @@ def gather(since, repo, no_db, root=DEFAULT_ROOT):
     return data, evs, prs, stats
 
 
-def warn_prices(evs) -> None:
-    for flag, label in (("unpriced", "no price row; priced at the nearest row"), ("verify", "priced from a # VERIFY row")):
-        models = sorted({e["model"] for e in evs if e["price_flag"] == flag})
-        if models:
-            err.print(f"[yellow]warning:[/] {label}: {', '.join(f'{m} (as {lookup(m)[0]})' for m in models)}")
+def warn(evs, stats) -> None:
+    """Print what a reader of the numbers needs to know: missing GitHub data and unpriced models.
+    Unverified price rows are listed by `doctor` instead."""
+    for msg in stats:
+        if any(w in msg for w in WARN):
+            err.print(f"[yellow]note:[/] {msg}" + (f" ({stats[msg]})" if stats[msg] > 1 else ""))
+    models = sorted({e["model"] for e in evs if e["price_flag"] == "unpriced"})
+    if models:
+        err.print("[yellow]note:[/] no price on file, priced at the nearest model: "
+                  + ", ".join(f"{m} (as {lookup(m)[0]})" for m in models))
 
 
 def common(f):
@@ -60,9 +65,45 @@ def common(f):
     return click.option("--no-db", is_flag=True, help="skip the ~/.tokentab/usage.db history")(f)
 
 
-@click.group()
-def main():
-    """What Claude Code token spend bought, per PR."""
+REPORT = STATE / "report.html"
+
+
+@click.group(invoke_without_command=True)
+@click.option("--since", default="30d", show_default=True, help="period for the quick report")
+@click.option("--no-open", is_flag=True, help="don't open the quick report in a browser")
+@click.version_option(package_name="tokentab")
+@click.pass_context
+def main(ctx, since, no_open):
+    """What your Claude Code token spend bought, per pull request.
+
+    Run with no command for a quick report: a summary here and the full report in your browser.
+    """
+    if ctx.invoked_subcommand is None:
+        quick(since, open_browser=not no_open)
+
+
+def quick(since: str, open_browser: bool) -> None:
+    import webbrowser
+
+    from .html import write
+
+    with err.status("Reading Claude Code transcripts and matching them to GitHub pull requests…"):
+        _, evs, prs, stats = gather(since, None, False)
+    if not evs:
+        err.print(f"No Claude Code usage found in {DEFAULT_ROOT} for the last {since}.")
+        return
+    warn(evs, stats)
+    write(evs, prs, REPORT, since=since)
+    s = rpt.summary(evs, prs)
+    out = Console()
+    out.print(f"\n[bold]Claude Code spend, last {since}: ${s['usd']:,.2f}[/] at API prices")
+    if s["merged_prs"]:
+        out.print(f"  {s['merged_prs']} merged PRs, median ${s['median_usd_per_merged_pr']:,.2f} each")
+    out.print(f"  ${s['unattributed_usd']:,.2f} not tied to any PR, ${s['dead_usd']:,.2f} of it dead spend")
+    out.print(f"  {s['cache_ratio']:.0%} of prompt tokens came from cache")
+    out.print(f"\nFull report: {REPORT}")
+    if open_browser:
+        webbrowser.open(REPORT.as_uri())
 
 
 @main.command()
@@ -72,10 +113,7 @@ def main():
 def report(since, repo, no_db, by, html_path):
     """Spend table (or HTML report) joined to PRs."""
     _, evs, prs, stats = gather(since, repo, no_db)
-    for msg in stats:
-        if any(w in msg for w in WARN):
-            err.print(f"[yellow]warning:[/] {msg} ({stats[msg]})")
-    warn_prices(evs)
+    warn(evs, stats)
     if html_path:
         from .html import write
         write(evs, prs, Path(html_path), since=since)
@@ -91,8 +129,8 @@ def export(since, repo, no_db, csv_path):
     """One row per (session, PR) with every field, for finance."""
     import csv
 
-    _, evs, prs, _ = gather(since, repo, no_db)
-    warn_prices(evs)
+    _, evs, prs, stats = gather(since, repo, no_db)
+    warn(evs, stats)
     rows = rpt.csv_rows(evs, prs)
     with open(csv_path, "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=rpt.CSV_FIELDS)

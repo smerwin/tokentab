@@ -16,10 +16,11 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from .. import STATE
 from ..pricing import lookup
 from .claude_jsonl import merge
 
-DEFAULT_DIR = Path(os.environ.get("TOKENTAB_OTEL_DIR", Path.home() / ".tokentab" / "otel"))
+DEFAULT_DIR = Path(os.environ.get("TOKENTAB_OTEL_DIR") or STATE / "otel")
 SIGNALS = {"/v1/logs": "logs", "/v1/metrics": "metrics", "/v1/traces": "traces"}
 
 

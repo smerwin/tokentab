@@ -155,7 +155,7 @@ def write(evs: list[dict], prs: dict, path: Path, since: str | None = None) -> N
                        f"Week of {k}: {len(m)} merged, {_money(sum(m) / len(m))} each on average" if m else ""))
     cache = [(label(k), t["cache_ratio"], f"Week of {k}: {t['cache_ratio']:.1%} of prompt tokens read from cache") for k, t in wk]
     models = sorted(((m, rpt.totals(g)["usd"]) for m, g in rpt.group(evs, lambda e: e["model"]).items()), key=lambda x: -x[1])
-    flagged = sorted({e["model"] for e in evs if e["price_flag"]})
+    flagged = sorted({e["model"] for e in evs if e["price_flag"] == "unpriced"})
     span = f"Last {since}" if since else "All recorded history"
     if evs:
         span += f" · {min(e['ts'] for e in evs).astimezone():%b %d, %Y} – {max(e['ts'] for e in evs).astimezone():%b %d, %Y}"
@@ -171,7 +171,7 @@ def write(evs: list[dict], prs: dict, path: Path, since: str | None = None) -> N
     pr_table = _table(
         ["PR", "Title", "Status", "Sessions", "Tokens", "Cache", "Output", "Spend", "Confidence"],
         [[f'<a href="{r["url"]}">{escape(r["label"])}</a>' if r.get("url") else escape(r["label"]), escape(r["title"]),
-          {"merged": "merged", "closed": "closed, not merged", "open": "open"}.get(r["state"], "—"),
+          {"merged": "merged", "closed": "closed, not merged", "open": "open", "unknown": "unknown"}.get(r["state"], "—"),
           str(r["sessions"]), rpt.human(r["tokens"]), f"{r['cache_ratio']:.0%}", f"{r['output_share']:.1%}",
           _money(r["usd"]), r["confidence"]] for r in rows],
         num={3, 4, 5, 6, 7}, classes=["unattr" if r["state"] == "unattributed" else "" for r in rows])
@@ -180,8 +180,8 @@ def write(evs: list[dict], prs: dict, path: Path, since: str | None = None) -> N
         [[k, _money(t["usd"]), str(len(merged_by_week.get(k, []))),
           _money(sum(merged_by_week[k]) / len(merged_by_week[k])) if k in merged_by_week else "—",
           f"{t['cache_ratio']:.1%}"] for k, t in wk], num={1, 2, 3, 4})
-    warn = (f'<p class="note warn">Prices for {", ".join(escape(m) for m in flagged)} are unverified or estimated '
-            f'(flagged in prices.yaml); confirm them before quoting these numbers.</p>') if flagged else ""
+    warn = (f'<p class="note warn">No published price is on file for {", ".join(escape(m) for m in flagged)}; '
+            f'those rows are priced at the nearest model and are estimates.</p>') if flagged else ""
 
     html = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">

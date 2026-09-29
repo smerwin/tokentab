@@ -4,13 +4,21 @@ version = "0.1.0"
 description = "What your Claude Code token spend bought, per merged PR"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = ["click", "pyyaml", "rich"]
+dependencies = ["click>=8.1", "pyyaml>=6.0", "rich>=13.0"]
+keywords = ["claude", "claude-code", "anthropic", "tokens", "cost", "github", "pull-requests"]
+classifiers = [
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development",
+]
 
 [project.scripts]
 tokentab = "tokentab.cli:main"
 
 [dependency-groups]
-dev = ["pytest"]
+dev = ["pytest>=8"]
 
 [build-system]
 requires = ["uv_build>=0.8,<1"]

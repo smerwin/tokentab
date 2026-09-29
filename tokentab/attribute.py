@@ -3,20 +3,26 @@ own, so a session that spans branches or PRs is split by time automatically."""
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
+import threading
 import time
+import urllib.error
+import urllib.request
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from functools import cache
 from pathlib import Path
 
+from . import STATE
 from .loaders.claude_jsonl import assign_branches, parse_ts
 from .pricing import cost, lookup
 
-GH_CACHE = Path.home() / ".tokentab" / "gh_cache.json"
-GH_FIELDS = "number,title,headRefName,createdAt,mergedAt,closedAt,additions,deletions"
+GH_CACHE = STATE / "gh_cache.json"
+GH_FIELDS = "number,title,headRefName,createdAt,mergedAt,closedAt"
 RANK = {"pr-link": 3, "trailer": 3, "branch+window": 2, "repo-only": 1, "none": 0}
 SESSION_RE = re.compile(r"^Claude-Session:\s*\S*session_(\w+)", re.M)
 COAUTHOR_RE = re.compile(r"^Co-Authored-By:\s*Claude", re.M | re.I)
@@ -52,18 +58,47 @@ def resolve_repo(cwd: str) -> Repo | None:
     return Repo(m.group(1) if m else (url or main), main, bool(m))
 
 
+def _rest_prs(slug: str) -> list[dict] | None:
+    """GitHub REST fallback for when `gh` is missing or signed out: uses GH_TOKEN or GITHUB_TOKEN
+    if set, else anonymous access (public repos only). Newest 500 PRs, in `gh pr list` field names."""
+    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    headers = {"Accept": "application/vnd.github+json", "User-Agent": "tokentab"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    prs: list[dict] = []
+    for page in range(1, 6):
+        url = f"https://api.github.com/repos/{slug}/pulls?state=all&per_page=100&page={page}"
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=30) as r:
+                batch = json.loads(r.read())
+        except (urllib.error.URLError, OSError, ValueError):
+            return prs or None
+        prs += [{"number": p["number"], "title": p["title"], "headRefName": p["head"]["ref"],
+                 "createdAt": p["created_at"], "mergedAt": p["merged_at"], "closedAt": p["closed_at"]} for p in batch]
+        if len(batch) < 100:
+            break
+    return prs
+
+
+_cache_lock = threading.Lock()
+
+
 def gh_prs(slug: str, cache_path: Path = GH_CACHE, ttl: int = 3600) -> list[dict] | None:
-    store = json.loads(cache_path.read_text()) if cache_path.exists() else {}
-    hit = store.get(slug)
+    """PRs for `slug`, cached for `ttl` seconds. Safe to call from several threads at once."""
+    with _cache_lock:
+        hit = (json.loads(cache_path.read_text()) if cache_path.exists() else {}).get(slug)
     if hit and time.time() - hit["fetched"] < ttl:
         return hit["prs"]
     out = _run("gh", "pr", "list", "-R", slug, "--state", "all", "--limit", "500", "--json", GH_FIELDS)
-    if out is None:
+    prs = json.loads(out) if out is not None else _rest_prs(slug)
+    if prs is None:
         return None
-    store[slug] = {"fetched": time.time(), "prs": json.loads(out)}
-    cache_path.parent.mkdir(parents=True, exist_ok=True)
-    cache_path.write_text(json.dumps(store))
-    return store[slug]["prs"]
+    with _cache_lock:
+        store = json.loads(cache_path.read_text()) if cache_path.exists() else {}
+        store[slug] = {"fetched": time.time(), "prs": prs}
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(json.dumps(store))
+    return prs
 
 
 def git_commits(path: str) -> list[dict]:
@@ -111,21 +146,29 @@ def attribute(events, pr_links, bridge, now=None, resolve=resolve_repo, fetch_pr
         repos.setdefault(slug, Repo(slug, None, True))
 
     prs: dict[tuple, dict] = {}
+    github = [slug for slug, repo in repos.items() if repo.github]
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        fetched = dict(zip(github, pool.map(fetch_prs, github)))
     for slug, repo in repos.items():
-        data = fetch_prs(slug) if repo.github else None
+        data = fetched.get(slug)
         if repo.github and data is None:
-            stats[f"gh pr list failed for {slug}"] += 1
+            stats[f"no PR data for {slug}: gh unavailable and the GitHub API refused (install gh or set GH_TOKEN)"] += 1
         elif data is not None and len(data) >= 500:
-            stats[f"{slug} hit gh's 500-PR limit; sessions on older PRs will show as repo-only"] += 1
+            stats[f"{slug} has more than 500 PRs; older ones are matched only through Claude Code's own records"] += 1
         for p in data or []:
             prs[(slug, p["number"])] = _pr_record(slug, p, now)
 
     links: dict[str, dict] = defaultdict(dict)  # session -> {pr key: (anchor ts, source)}
+    first_link: dict[tuple, str] = {}
+    for _, slug, number, ts in pr_links:
+        first_link[(slug, number)] = min(ts, first_link.get((slug, number), ts))
+    for key, ts in first_link.items():
+        if key not in prs:  # no GitHub data: keep the PR Claude Code recorded, without title or status
+            prs[key] = {**_pr_record(key[0], {"number": key[1], "title": "", "headRefName": None, "createdAt": ts}, now),
+                        "state": "unknown"}
+            stats["PRs known only from Claude Code's records, without titles or merge status"] += 1
     for session, slug, number, ts in pr_links:
         key = (slug, number)
-        if key not in prs:
-            stats["pr-link to a PR gh did not return"] += 1
-            continue
         old = links[session].get(key)
         links[session][key] = (min(old[0], parse_ts(ts)) if old else parse_ts(ts), "pr-link")
     for slug, repo in repos.items():

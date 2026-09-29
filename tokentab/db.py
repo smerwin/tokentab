@@ -5,9 +5,10 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+from . import STATE
 from .loaders.claude_jsonl import TOKEN_FIELDS, Load, parse_ts
 
-DEFAULT_DB = Path.home() / ".tokentab" / "usage.db"
+DEFAULT_DB = STATE / "usage.db"
 COLS = ("msg_id", "request_id", "session_id", "ts", "model", "cwd", "git_branch", "sidechain", *TOKEN_FIELDS,
         "source", "user", "reported_usd", "repo_hint")
 ADDED = {"source": "'transcript'", "user": "''", "reported_usd": "NULL", "repo_hint": "''"}

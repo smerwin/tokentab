@@ -52,8 +52,8 @@ def pr_rows(evs: list[dict], prs: dict) -> list[dict]:
             t.update(label=k[1].rsplit("/", 1)[-1].strip("()").join("()"), title="unattributed: no PR", merged="-", state="unattributed")
         else:
             p = prs[k]
-            t.update(label=f"{k[0].rsplit('/', 1)[-1]}#{k[1]}", title=p["title"], state=p["state"],
-                     merged={"merged": "Y", "closed": "N"}.get(p["state"], "open"), merged_at=p.get("mergedAt"),
+            t.update(label=f"{k[0].rsplit('/', 1)[-1]}#{k[1]}", title=p["title"] or "(title unavailable without GitHub access)", state=p["state"],
+                     merged={"merged": "Y", "closed": "N", "unknown": "?"}.get(p["state"], "open"), merged_at=p.get("mergedAt"),
                      url=f"https://github.com/{k[0]}/pull/{k[1]}")
         t["confidence"] = weakest(g)
         rows.append(t)

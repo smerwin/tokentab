@@ -4,3 +4,4 @@ __pycache__/
 out.html
 *.csv
 .DS_Store
+dist/

@@ -349,3 +349,36 @@ def test_hook_ignores_other_commands_and_never_fails(monkeypatch):
     monkeypatch.setattr(cli, "_comment", broken)
     result = run('{"tool_name": "Bash", "tool_input": {"command": "git push"}, "cwd": "/r"}')
     assert result.exit_code == 0 and "no PR for the current branch" in result.output
+
+
+def test_no_github_access_still_attributes_to_recorded_prs():
+    data = load(FIX / "projects")
+    evs = list(data.events.values())
+    prs, stats = attribute(evs, data.pr_links, data.bridge, now=NOW, resolve=fake_resolve,
+                           fetch_prs=lambda slug: None, fetch_commits=lambda path: [])
+    ev = {e["msg_id"]: e for e in evs}
+    assert (ev["msg_p"]["pr"], ev["msg_p"]["confidence"]) == (("me/repo", 3), "pr-link")
+    assert prs[("me/repo", 3)]["state"] == "unknown"
+    assert ev["msg_a"]["confidence"] == "repo-only"  # branch matching needs GitHub's head branch names
+    assert any("no PR data" in k for k in stats) and any("known only" in k for k in stats)
+    rows = report.pr_rows(evs, prs)
+    assert next(r for r in rows if r["label"] == "repo#3")["merged"] == "?"
+
+
+def test_rest_fallback_maps_github_pulls(monkeypatch):
+    import io
+
+    from tokentab import attribute as A
+    payload = [{"number": 9, "title": "T", "head": {"ref": "feat"}, "created_at": "2026-09-01T00:00:00Z",
+                "merged_at": None, "closed_at": None}]
+    seen = []
+
+    def urlopen(req, timeout):
+        seen.append(req)
+        return io.BytesIO(json.dumps(payload).encode())
+    monkeypatch.setattr(A.urllib.request, "urlopen", urlopen)
+    monkeypatch.setenv("GH_TOKEN", "tok")
+    assert A._rest_prs("me/repo") == [{"number": 9, "title": "T", "headRefName": "feat",
+                                        "createdAt": "2026-09-01T00:00:00Z", "mergedAt": None, "closedAt": None}]
+    assert seen[0].full_url.startswith("https://api.github.com/repos/me/repo/pulls?state=all")
+    assert seen[0].get_header("Authorization") == "Bearer tok"

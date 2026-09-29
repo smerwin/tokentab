@@ -1,8 +1,8 @@
 # tokentab
 
 What your Claude Code token spend bought, per merged PR. Local-first: it reads the transcripts
-Claude Code already writes to `~/.claude/projects`, joins them to your GitHub PRs with the `gh`
-CLI, and prints a table or writes a one-file HTML report. No hosted service, no API key.
+Claude Code already writes to `~/.claude/projects`, matches them to your GitHub pull requests, and
+opens a one-page report in your browser. No hosted service, no API key, nothing uploaded.
 
 **How this differs from [ccusage](https://github.com/ryoppippi/ccusage):** ccusage computes cost per
 day, session, and model from the same files and stops at the session; tokentab joins sessions to
@@ -15,19 +15,25 @@ non-engineer can read.
 
 ## Run it
 
-Needs Python 3.11+, [uv](https://docs.astral.sh/uv/), and an authenticated `gh`.
+With [uv](https://docs.astral.sh/uv/) installed:
 
 ```bash
-uv sync
+uvx tokentab
 ```
 
-```bash
-uv run tokentab report --since 30d
-```
+That prints a summary of the last 30 days and opens the full report in your browser (also saved to
+`~/.tokentab/report.html`). `uvx tokentab --since 90d` covers a longer period, and `--no-open` skips the
+browser. No uv? `pipx run tokentab` does the same.
 
-```bash
-uv run tokentab report --since 30d --html out.html
-```
+GitHub data comes from the first of these that works, per repo:
+
+1. the [`gh` CLI](https://cli.github.com/), if installed and signed in (sees private repos);
+2. the GitHub API with `GH_TOKEN` or `GITHUB_TOKEN`, if set;
+3. the GitHub API without a token (public repos only);
+4. none: spend still lands on the PRs Claude Code itself recorded opening, just without titles or
+   merge status, and the report says so.
+
+For more detail, the same tool has subcommands:
 
 | command | what it does |
 |---|---|
@@ -39,7 +45,8 @@ uv run tokentab report --since 30d --html out.html
 | `billed [--since 30d]` | vendor-reported cost and usage (Anthropic Admin, Claude Enterprise, OpenAI) |
 | `doctor` | observed schema, models and their price rows, unpriced models, repos, other sources, `gh auth status` |
 
-`--since` takes `12h`, `30d`, `2w`, or a date. `--no-db` skips the history database.
+`--since` takes `12h`, `30d`, `2w`, or a date. `--no-db` skips the history database. tokentab keeps its
+state in `~/.tokentab`; set `TOKENTAB_HOME` to put it elsewhere.
 
 ## What the numbers mean
 
@@ -175,7 +182,8 @@ made by `billed` when you set their keys.
 
 ## Known gaps
 
-- `gh pr list --limit 500` misses older PRs in busy repos; tokentab warns when a repo hits the limit.
+- Only a repo's 500 most recent PRs are fetched; older ones are matched only through Claude Code's own
+  records, and tokentab says when a repo hits the limit.
 - Sessions whose transcripts were pruned before the first run are gone. `Claude-Session:` trailers
   still name them, but there are no tokens left to count.
 - `~/.claude/stats-cache.json` keeps per-model totals for days whose transcripts are gone, but it counts
@@ -185,6 +193,10 @@ made by `billed` when you set their keys.
   against live accounts.
 
 ## Develop
+
+```bash
+uv sync
+```
 
 ```bash
 uv run pytest
