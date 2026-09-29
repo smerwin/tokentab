@@ -89,7 +89,7 @@ def _pr_record(slug: str, p: dict, now: datetime) -> dict:
 
 
 def attribute(events, pr_links, bridge, now=None, resolve=resolve_repo, fetch_prs=gh_prs, fetch_commits=git_commits):
-    """Annotate events in place with repo, pr, confidence, usd, price_flag. Returns (prs, stats)."""
+    """Annotate events in place with repo, github, pr, confidence, usd, price_flag. Returns (prs, stats)."""
     now = now or datetime.now(timezone.utc)
     stats = defaultdict(int)
     assign_branches(events)
@@ -102,7 +102,7 @@ def attribute(events, pr_links, bridge, now=None, resolve=resolve_repo, fetch_pr
         repo = resolve(ev["cwd"]) if ev["cwd"] else None
         if repo is None and len(link_repos[ev["session_id"]]) == 1:
             repo = Repo(next(iter(link_repos[ev["session_id"]])), None, True)
-        ev["repo"] = repo.slug if repo else None
+        ev["repo"], ev["github"] = (repo.slug, repo.github) if repo else (None, False)
         if repo and (repo.slug not in repos or repos[repo.slug].path is None):
             repos[repo.slug] = repo
     for slug in {s for slugs in link_repos.values() for s in slugs}:
@@ -161,6 +161,6 @@ def attribute(events, pr_links, bridge, now=None, resolve=resolve_repo, fetch_pr
         if pick is None:
             conf = "repo-only" if ev["repo"] else "none"
         else:
-            ev["repo"] = pick[0]
+            ev["repo"], ev["github"] = pick[0], True
         ev["pr"], ev["confidence"] = pick, conf
     return prs, stats
