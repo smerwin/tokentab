@@ -1,0 +1,32 @@
+[
+ {
+  "number": 1,
+  "title": "Feature A",
+  "headRefName": "feat-a",
+  "createdAt": "2026-09-01T10:00:00Z",
+  "mergedAt": "2026-09-02T10:00:00Z",
+  "closedAt": "2026-09-02T10:00:00Z",
+  "additions": 10,
+  "deletions": 2
+ },
+ {
+  "number": 2,
+  "title": "Feature B, abandoned",
+  "headRefName": "feat-b",
+  "createdAt": "2026-09-01T14:00:00Z",
+  "mergedAt": null,
+  "closedAt": "2026-09-03T10:00:00Z",
+  "additions": 5,
+  "deletions": 0
+ },
+ {
+  "number": 3,
+  "title": "Still open",
+  "headRefName": "feat-open",
+  "createdAt": "2026-09-02T09:30:00Z",
+  "mergedAt": null,
+  "closedAt": null,
+  "additions": 1,
+  "deletions": 1
+ }
+]

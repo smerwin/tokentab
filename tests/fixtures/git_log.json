@@ -1,0 +1,8 @@
+[
+ {
+  "sha": "abc",
+  "date": "2026-09-02T10:00:00Z",
+  "subject": "Feature A (#1)",
+  "body": "Does A.\n\nClaude-Session: https://claude.ai/code/session_01TRAILER\nCo-Authored-By: Claude <noreply@anthropic.com>\n"
+ }
+]
