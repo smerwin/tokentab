@@ -1,0 +1,26 @@
+# USD per million tokens. Keys match as substrings of message.model; the longest match wins.
+# Cache multipliers apply to `input`: 5-minute writes x cache_write_mult, 1-hour writes
+# x cache_write_1h_mult (Claude Code writes both TTLs), reads x cache_read_mult.
+# Rows with `verify: true` were not supplied by you; tokentab warns until you drop the flag.
+# Source for VERIFY rows: Anthropic API price table as cached in Claude Code's claude-api
+# reference, 2026-06-24. Confirm at https://www.anthropic.com/pricing before relying on them.
+
+claude-opus-5-5:
+  input: 4.00
+  output: 20.00
+  cache_write_mult: 1.25
+  cache_write_1h_mult: 2.0   # VERIFY: added by tokentab (published 1h write rate is 2x)
+  cache_read_mult: 0.10      # your seed; the reference lists $0.20/MTok reads (0.05x)
+
+claude-opus-5:               # VERIFY
+  {input: 5.00, output: 25.00, cache_write_mult: 1.25, cache_write_1h_mult: 2.0, cache_read_mult: 0.10, verify: true}
+claude-sonnet-5:             # VERIFY
+  {input: 2.00, output: 10.00, cache_write_mult: 1.25, cache_write_1h_mult: 2.0, cache_read_mult: 0.10, verify: true}
+claude-sonnet-4-6:           # VERIFY
+  {input: 3.00, output: 15.00, cache_write_mult: 1.25, cache_write_1h_mult: 2.0, cache_read_mult: 0.10, verify: true}
+claude-fable-5:              # VERIFY
+  {input: 10.00, output: 50.00, cache_write_mult: 1.25, cache_write_1h_mult: 2.0, cache_read_mult: 0.10, verify: true}
+claude-fable-5-1:            # VERIFY: reads are $0.25/MTok on this model
+  {input: 10.00, output: 50.00, cache_write_mult: 1.25, cache_write_1h_mult: 2.0, cache_read_mult: 0.025, verify: true}
+claude-haiku-4-5:            # VERIFY
+  {input: 1.00, output: 5.00, cache_write_mult: 1.25, cache_write_1h_mult: 2.0, cache_read_mult: 0.10, verify: true}
