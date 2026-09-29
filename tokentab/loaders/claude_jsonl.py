@@ -64,6 +64,10 @@ def _event(d: dict, path: Path) -> dict | None:
         "cache_w": u.get("cache_creation_input_tokens") or 0,
         "cache_w_1h": cc.get("ephemeral_1h_input_tokens") or 0,
         "cache_r": u.get("cache_read_input_tokens") or 0,
+        "source": "transcript",
+        "user": "",
+        "reported_usd": None,
+        "repo_hint": "",
     }
 
 

@@ -76,6 +76,7 @@ VIEWS = {
     "session": lambda e: e["session_id"][:8],
     "branch": lambda e: f"{(e['repo'] or '(no repo)').rsplit('/', 1)[-1]}:{e['branch'] or '(detached)'}",
     "model": lambda e: e["model"],
+    "user": lambda e: e.get("user") or "(this machine)",
     "week": lambda e: week(e["ts"]),
 }
 
@@ -138,7 +139,7 @@ def render(evs: list[dict], prs: dict, by: str, console: Console) -> None:
     )
 
 
-CSV_FIELDS = ("session_id", "repo", "pr_number", "pr_title", "pr_state", "confidence", "first_ts", "last_ts",
+CSV_FIELDS = ("session_id", "source", "user", "repo", "pr_number", "pr_title", "pr_state", "confidence", "first_ts", "last_ts",
               "models", "input", "output", "cache_w", "cache_w_1h", "cache_r", "tokens", "cache_ratio",
               "output_share", "usd", "dead_spend", "price_flags")
 
@@ -149,7 +150,8 @@ def csv_rows(evs: list[dict], prs: dict) -> list[dict]:
                                           key=lambda kv: min(e["ts"] for e in kv[1])):
         t, p = totals(g), prs.get(pr, {})
         rows.append({
-            "session_id": session, "repo": repo, "pr_number": pr[1] if pr else "", "pr_title": p.get("title", ""),
+            "session_id": session, "source": " ".join(sorted({e.get("source", "transcript") for e in g})),
+            "user": " ".join(sorted({e.get("user") or "" for e in g} - {""})), "repo": repo, "pr_number": pr[1] if pr else "", "pr_title": p.get("title", ""),
             "pr_state": p.get("state", "unattributed"), "confidence": weakest(g),
             "first_ts": min(e["ts"] for e in g).isoformat(), "last_ts": max(e["ts"] for e in g).isoformat(),
             "models": " ".join(sorted({e["model"] for e in g})),

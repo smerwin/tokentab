@@ -22,5 +22,9 @@ claude-fable-5:              # VERIFY
   {input: 10.00, output: 50.00, cache_write_mult: 1.25, cache_write_1h_mult: 2.0, cache_read_mult: 0.10, verify: true}
 claude-fable-5-1:            # VERIFY: reads are $0.25/MTok on this model
   {input: 10.00, output: 50.00, cache_write_mult: 1.25, cache_write_1h_mult: 2.0, cache_read_mult: 0.025, verify: true}
+claude-opus-4-8:             # VERIFY
+  {input: 5.00, output: 25.00, cache_write_mult: 1.25, cache_write_1h_mult: 2.0, cache_read_mult: 0.10, verify: true}
+claude-opus-4-6:             # VERIFY
+  {input: 5.00, output: 25.00, cache_write_mult: 1.25, cache_write_1h_mult: 2.0, cache_read_mult: 0.10, verify: true}
 claude-haiku-4-5:            # VERIFY
   {input: 1.00, output: 5.00, cache_write_mult: 1.25, cache_write_1h_mult: 2.0, cache_read_mult: 0.10, verify: true}

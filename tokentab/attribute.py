@@ -100,6 +100,8 @@ def attribute(events, pr_links, bridge, now=None, resolve=resolve_repo, fetch_pr
     repos: dict[str, Repo] = {}
     for ev in events:
         repo = resolve(ev["cwd"]) if ev["cwd"] else None
+        if repo is None and ev.get("repo_hint"):
+            repo = Repo(ev["repo_hint"], None, True)
         if repo is None and len(link_repos[ev["session_id"]]) == 1:
             repo = Repo(next(iter(link_repos[ev["session_id"]])), None, True)
         ev["repo"], ev["github"] = (repo.slug, repo.github) if repo else (None, False)

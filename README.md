@@ -31,10 +31,13 @@ uv run tokentab report --since 30d --html out.html
 
 | command | what it does |
 |---|---|
-| `report [--since 30d] [--repo PATH] [--by pr\|session\|branch\|model\|week]` | spend table; footer shows total, unattributed, dead spend, median per merged PR, cache ratio |
+| `report [--since 30d] [--repo PATH] [--by pr\|session\|branch\|model\|week\|user]` | spend table; footer shows total, unattributed, dead spend, median per merged PR, cache ratio |
 | `report --html FILE` | self-contained HTML (inline CSS and SVG, no scripts, works offline) |
 | `export --csv FILE` | one row per (session, PR) with every field, for finance |
-| `doctor` | observed schema, models and their price rows, unpriced models, repos, `gh auth status` |
+| `comment [--pr N] [--repo PATH] [--post]` | this PR's cost as a PR comment; prints it unless `--post` |
+| `otel serve [--host] [--port] [--token]` | receive Claude Code OpenTelemetry and fold it into reports |
+| `billed [--since 30d]` | vendor-reported cost and usage (Anthropic Admin, Claude Enterprise, OpenAI) |
+| `doctor` | observed schema, models and their price rows, unpriced models, repos, other sources, `gh auth status` |
 
 `--since` takes `12h`, `30d`, `2w`, or a date. `--no-db` skips the history database.
 
@@ -77,6 +80,82 @@ records) > `branch+window` > `repo-only` > `none`.
 name a session, so tying one to a session would mean guessing between whatever sessions were running
 at the time.
 
+## PR comments
+
+`tokentab comment` renders the current branch's PR cost as a Markdown comment (spend, sessions, tokens,
+cache ratio, per-model split, and how it compares with the repo's median merged PR). It prints the comment
+unless you pass `--post`; with `--post` it creates one comment and edits that same comment on every later
+run, found by a hidden `<!-- tokentab:cost -->` marker and your GitHub login.
+
+The numbers come from the transcripts on the machine that runs the command, so a PR shows the poster's
+Claude Code spend, not a teammate's. Posting puts that spend on the PR for everyone who can read it.
+
+To have Claude Code keep the comment current, install tokentab as a command and add a `PostToolUse`
+hook. After any Bash call that runs `git push` or `gh pr create`, `tokentab hook` posts or updates the
+comment for that checkout's PR; for anything else it does nothing, and it never fails the tool call.
+
+```bash
+uv tool install --editable .
+```
+
+In `~/.claude/settings.json` (or a project's `.claude/settings.json`):
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {"matcher": "Bash", "hooks": [{"type": "command", "command": "tokentab hook", "timeout": 60}]}
+    ]
+  }
+}
+```
+
+## OpenTelemetry
+
+`tokentab otel serve` is a small OTLP/HTTP receiver (JSON only; protobuf would need a new dependency).
+Point Claude Code at it:
+
+```bash
+uv run tokentab otel serve
+```
+
+```bash
+CLAUDE_CODE_ENABLE_TELEMETRY=1 OTEL_LOGS_EXPORTER=otlp OTEL_METRICS_EXPORTER=otlp OTEL_EXPORTER_OTLP_PROTOCOL=http/json OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318 OTEL_METRICS_INCLUDE_REPOSITORY=true claude
+```
+
+Captures land in `~/.tokentab/otel/` (or `TOKENTAB_OTEL_DIR`); lines written by an OpenTelemetry
+Collector's file exporter in that directory are read too. Every report folds them in:
+
+- Each `claude_code.api_request` event is one API request. If the same `request_id` is in a transcript,
+  the transcript wins and the OTel copy is dropped, so running both never double counts.
+- Token metrics are used only for sessions with no request events.
+- OTel reports cache writes as one number. tokentab splits it into 5-minute and 1-hour writes by finding
+  the split that reproduces Claude Code's own `cost_usd`; when none does, it assumes 1-hour and says so.
+- OTel carries no working directory or branch. A request whose session also has a transcript borrows its
+  repo and branch from it. Otherwise the repo comes from the `vcs.*` metric attributes
+  (`OTEL_METRICS_INCLUDE_REPOSITORY=true`), which name the repo but not the branch, so teammates'
+  OTel-only spend is attributed to the repo (`repo-only`), never to a PR.
+- `--by user` groups spend by the `user.email` on each request.
+
+To collect from other machines, listen beyond localhost with a token
+(`tokentab otel serve --host 0.0.0.0 --token SECRET`) and have Claude Code send
+`OTEL_EXPORTER_OTLP_HEADERS='Authorization=Bearer SECRET'`. The receiver has no TLS; put it behind one
+if the traffic leaves a trusted network.
+
+## Vendor-reported spend
+
+`tokentab billed` shows what vendors themselves report, next to (never added to) the API-equivalent
+numbers, since the same request can appear in both. Each source turns on when its key is set:
+
+| env var | organization | what it shows |
+|---|---|---|
+| `ANTHROPIC_ADMIN_KEY` | Claude Console (API) | invoiced cost and billed tokens per model; per-user Claude Code sessions, PRs, commits, and estimated cost |
+| `ANTHROPIC_ANALYTICS_KEY` | Claude Enterprise (claude.ai seats; key needs `read:analytics`) | per-user Claude Code cost, sessions, PRs, commits, and cost per PR |
+| `OPENAI_ADMIN_KEY` | OpenAI | costs per line item and tokens per model |
+
+Keys are sent only to the vendor that issued them. The Enterprise and Claude Code analytics numbers are
+per user per day, so "cost per PR" there is a user's spend divided by their PR count, not a per-PR figure.
+
 ## Prices
 
 `tokentab/prices.yaml` is keyed by model-ID substring (longest match wins). Rows marked `verify: true`
@@ -89,16 +168,21 @@ view. Override the file with `TOKENTAB_PRICES=/path/to/prices.yaml`.
 - `~/.tokentab/usage.db`: SQLite history of every message seen, unique on `(message.id, requestId)`.
   Claude Code deletes old transcripts (about 30 days by default), so this is what keeps older months reportable.
 - `~/.tokentab/gh_cache.json`: `gh pr list` results, reused for an hour.
+- `~/.tokentab/otel/`: OTLP payloads received by `tokentab otel serve`.
 
-Nothing leaves your machine except the `gh` calls to GitHub.
+Nothing leaves your machine except the `gh` calls to GitHub, `comment --post`, and the vendor API calls
+made by `billed` when you set their keys.
 
 ## Known gaps
 
 - `gh pr list --limit 500` misses older PRs in busy repos; tokentab warns when a repo hits the limit.
 - Sessions whose transcripts were pruned before the first run are gone. `Claude-Session:` trailers
   still name them, but there are no tokens left to count.
-- `tokentab/loaders/otel.py` describes the planned v1 sources: Claude Code OpenTelemetry, the Anthropic
-  Admin API usage and cost reports, and OpenAI's organization usage endpoints.
+- `~/.claude/stats-cache.json` keeps per-model totals for days whose transcripts are gone, but it counts
+  every streamed line of a message (1.8 to 2.5 times the real figure where tokentab could check), so
+  `doctor` shows it only as an upper bound and it is never added to spend.
+- The vendor API clients are written and tested against the documented request and response shapes, not
+  against live accounts.
 
 ## Develop
 
