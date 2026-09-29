@@ -113,6 +113,8 @@ def attribute(events, pr_links, bridge, now=None, resolve=resolve_repo, fetch_pr
         data = fetch_prs(slug) if repo.github else None
         if repo.github and data is None:
             stats[f"gh pr list failed for {slug}"] += 1
+        elif data is not None and len(data) >= 500:
+            stats[f"{slug} hit gh's 500-PR limit; sessions on older PRs will show as repo-only"] += 1
         for p in data or []:
             prs[(slug, p["number"])] = _pr_record(slug, p, now)
 
