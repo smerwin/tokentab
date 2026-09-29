@@ -100,28 +100,35 @@ def _metrics(t: dict) -> list[str]:
 METRIC_COLS = ("in", "out", "cache_w", "cache_r", "cache%", "out%", "usd")
 
 
+def _table(head: list[str], rows: list[tuple[list[str], str | None]], flexible: int, width: int) -> Table:
+    """Size every column to its content except `flexible`, which gets the leftover width."""
+    widths = [max(len(h), *(len(c[i]) for c, _ in rows)) if rows else len(h) for i, h in enumerate(head)]
+    spare = width - (sum(widths) - widths[flexible]) - 3 * len(head) - 1
+    widths[flexible] = max(8, min(widths[flexible], spare))
+    table = Table(header_style="bold")
+    for h, w in zip(head, widths):
+        table.add_column(h, no_wrap=True, width=w, justify="right" if h in METRIC_COLS or h == "sessions" else "left")
+    for cells, style in rows:
+        cells = list(cells)
+        if len(cells[flexible]) > widths[flexible]:
+            cells[flexible] = cells[flexible][: widths[flexible] - 1] + "…"
+        table.add_row(*cells, style=style)
+    return table
+
+
 def render(evs: list[dict], prs: dict, by: str, console: Console) -> None:
-    table = Table(show_lines=False, header_style="bold")
     if by == "pr":
-        for c in ("PR#", "title", "merged", "sessions"):
-            table.add_column(c, no_wrap=True)
-        for c in METRIC_COLS:
-            table.add_column(c, justify="right")
-        table.add_column("confidence")
+        rows = []
         for r in pr_rows(evs, prs):
             title = r["title"] if len(r["title"]) <= 40 else r["title"][:39] + "…"
             style = "dim" if r["state"] == "unattributed" else "red" if r["state"] == "closed" else None
-            table.add_row(r["label"], title, r["merged"], str(r["sessions"]), *_metrics(r), r["confidence"], style=style)
+            rows.append(([r["label"], title, r["merged"], str(r["sessions"]), *_metrics(r), r["confidence"]], style))
+        table = _table(["PR#", "title", "merged", "sessions", *METRIC_COLS, "confidence"], rows, flexible=1, width=console.width)
     else:
-        table.add_column(by)
-        table.add_column("sessions", justify="right")
-        for c in METRIC_COLS:
-            table.add_column(c, justify="right")
-        table.add_column("flag")
         groups = sorted(group(evs, VIEWS[by]).items(), key=lambda kv: kv[0] if by == "week" else -totals(kv[1])["usd"])
-        for k, g in groups:
-            t = totals(g)
-            table.add_row(str(k), str(t["sessions"]), *_metrics(t), ",".join(t["flags"]))
+        rows = [([str(k), str(t["sessions"]), *_metrics(t), ",".join(t["flags"])], None)
+                for k, t in ((k, totals(g)) for k, g in groups)]
+        table = _table([by, "sessions", *METRIC_COLS, "flag"], rows, flexible=0, width=console.width)
     s = summary(evs, prs)
     console.print(table)
     console.print(
